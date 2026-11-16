@@ -11,6 +11,7 @@ builder.Services.AddSerilog(logging => logging
     .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
     // HttpClient logs request URLs. Ours contain the API key, so keep these quiet.
     .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
+    .MinimumLevel.Override("Polly", LogEventLevel.Warning)
     .WriteTo.Console());
 
 builder.Services.AddSingleton(TimeProvider.System);
