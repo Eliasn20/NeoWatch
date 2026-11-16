@@ -62,6 +62,27 @@ public sealed class ApproachRepositoryTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Upsert_ChangedDistance_UpdatesApproach()
+    {
+        // First run: save the asteroid with its original distance.
+        await using (var db = new NeoWatchDbContext(_options))
+        {
+            await new ApproachRepository(db).UpsertAsync([Sample()], CancellationToken.None);
+        }
+
+        // Second run: same asteroid, same moment, different distance.
+        await using (var db = new NeoWatchDbContext(_options))
+        {
+            var second = await new ApproachRepository(db)
+                .UpsertAsync([Sample(missKm: 9_999_999)], CancellationToken.None);
+
+            Assert.Equal(new UpsertResult(Inserted: 0, Updated: 1), second);
+            Assert.Equal(1, await db.Asteroids.CountAsync());
+            Assert.Equal(1, await db.CloseApproaches.CountAsync());
+        }
+    }
+
     // TODO (Elias): add tests for
     // - same asteroid, changed miss distance => Updated = 1, value changed in the database
     // - same asteroid, second approach (different epoch) => 1 asteroid, 2 approaches

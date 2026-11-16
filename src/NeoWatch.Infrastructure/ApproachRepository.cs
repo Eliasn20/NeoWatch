@@ -7,28 +7,60 @@ namespace NeoWatch.Infrastructure;
 
 public sealed class ApproachRepository(NeoWatchDbContext db) : IApproachRepository
 {
-    public Task<UpsertResult> UpsertAsync(IReadOnlyList<ParsedApproach> approaches, CancellationToken ct)
+    public async Task<UpsertResult> UpsertAsync(IReadOnlyList<ParsedApproach> approaches, CancellationToken ct)
     {
-        // TODO (Elias) - Milestone 3. This is the heart of the project.
-        //
-        // Goal: after this method, the database reflects `approaches`, and calling it
-        // again with the same list inserts 0 and changes nothing.
-        //
-        // Suggested shape (2 queries + 1 SaveChanges, not one query per row):
-        // 1. Collect the distinct NeoIds in the batch. Load the matching Asteroids,
-        //    including their CloseApproaches, into a Dictionary keyed by NeoId:
-        //      db.Asteroids.Include(a => a.CloseApproaches)
-        //                  .Where(a => neoIds.Contains(a.NeoId))
-        //                  .ToDictionaryAsync(a => a.NeoId, ct)
-        // 2. For each ParsedApproach:
-        //      - asteroid missing  -> create it, db.Asteroids.Add, put it in the dictionary
-        //      - asteroid present  -> refresh its fields (NASA revises estimates)
-        //      - approach with the same EpochMillis missing -> add it, count as inserted
-        //      - present -> update velocity/distance, count as updated only if a value changed
-        // 3. await db.SaveChangesAsync(ct) once, return the counts.
-        //
-        // When you write it, change the signature to `public async Task<UpsertResult> ...`.
-        throw new NotImplementedException();
+       var neoIds = approaches.Select(a => a.NeoId).Distinct().ToList();
+       
+       var existing = await db.Asteroids
+        .Include(a => a.CloseApproaches)
+        .Where(a => neoIds.Contains(a.NeoId))
+        .ToDictionaryAsync(a => a.NeoId, ct);
+
+        var inserted = 0;
+        var updated = 0;
+
+        foreach (var p in approaches)
+        {
+            if (!existing.TryGetValue(p.NeoId, out var asteroid))
+            {
+                asteroid = new Asteroid { NeoId = p.NeoId, Name = p.Name };
+                db.Asteroids.Add(asteroid);
+                existing[p.NeoId] = asteroid;
+                
+            }
+
+            asteroid.Name = p.Name;
+            asteroid.AbsoluteMagnitude = p.AbsoluteMagnitude;
+            asteroid.DiameterMinKm = p.DiameterMinKm;
+            asteroid.DiameterMaxKm = p.DiameterMaxKm;
+            asteroid.IsPotentiallyHazardous = p.IsPotentiallyHazardous;
+
+            var approach = asteroid.CloseApproaches
+                .FirstOrDefault(c => c.EpochMillis == p.EpochMillis);
+
+            if (approach is null)
+            {
+                asteroid.CloseApproaches.Add(new CloseApproach
+                {
+                    Date = p.Date,
+                    EpochMillis = p.EpochMillis,
+                    VelocityKmPerSec = p.VelocityKmPerSec,
+                    MissDistanceKm = p.MissDistanceKm,
+                    OrbitingBody = p.OrbitingBody,
+                });
+                inserted++;
+            }
+            else if (approach.VelocityKmPerSec != p.VelocityKmPerSec || approach.MissDistanceKm != p.MissDistanceKm)
+            {
+                approach.VelocityKmPerSec = p.VelocityKmPerSec;
+                approach.MissDistanceKm = p.MissDistanceKm;
+                updated++;
+            }
+        }
+
+
+        await db.SaveChangesAsync(ct);
+        return new UpsertResult(inserted, updated);
     }
 
     public async Task SaveSummariesAsync(IReadOnlyList<DailySummary> summaries, CancellationToken ct)
