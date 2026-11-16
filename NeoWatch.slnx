@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NeoWatch.Core/NeoWatch.Core.csproj" />
+    <Project Path="src/NeoWatch.Infrastructure/NeoWatch.Infrastructure.csproj" />
+    <Project Path="src/NeoWatch.Worker/NeoWatch.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NeoWatch.Tests/NeoWatch.Tests.csproj" />
+  </Folder>
+</Solution>
