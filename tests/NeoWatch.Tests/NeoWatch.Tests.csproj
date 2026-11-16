@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\NeoWatch.Core\NeoWatch.Core.csproj" />
     <ProjectReference Include="..\..\src\NeoWatch.Infrastructure\NeoWatch.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\NeoWatch.Worker\NeoWatch.Worker.csproj" />
   </ItemGroup>
 
 </Project>

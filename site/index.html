@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeoWatch</title>
+<meta name="description" content="Near-Earth asteroids passing close to our planet, updated daily from NASA NeoWs data.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0c10'/%3E%3Ccircle cx='14' cy='18' r='8' fill='%235f8bc0'/%3E%3Ccircle cx='25' cy='7' r='3' fill='%23ff5533'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --bg-alt: #101319;
+    --text: #f3f5f8;
+    --text-2: #b4bcc8;
+    --text-3: #7d8796;
+    --rule: rgba(255, 255, 255, 0.13);
+    --rule-strong: rgba(255, 255, 255, 0.28);
+    --blue: #5f8bc0;
+    --hazard: #ff5533;
+    --sans: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --gutter: 16px;
+  }
+  @media (min-width: 720px) { :root { --gutter: 40px; } }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 400 17px/1.6 var(--sans);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  @media (min-width: 720px) { body { font-size: 18px; } }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 var(--gutter); }
+
+  a { color: var(--text); text-decoration-color: var(--rule-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { text-decoration-color: currentColor; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+  h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; }
+  h2 { font-size: clamp(26px, 3.4vw, 38px); }
+  p { margin: 0; }
+
+  /* Masthead */
+  .masthead { border-bottom: 1px solid var(--rule); }
+  .masthead .wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 20px; padding-top: 18px; padding-bottom: 16px; }
+  .wordmark { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .masthead p { color: var(--text-2); font-size: 15px; }
+
+  /* Hero */
+  .hero .wrap {
+    display: grid;
+    gap: 32px;
+    align-items: center;
+    padding-top: clamp(32px, 6vw, 72px);
+    padding-bottom: clamp(36px, 6vw, 72px);
+  }
+  @media (min-width: 960px) {
+    .hero .wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 48px; }
+    .hero.no-globe .wrap { grid-template-columns: minmax(0, 1fr); }
+  }
+  .hero h1 { font-size: clamp(34px, 5.2vw, 62px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.04; max-width: 15ch; }
+  .hero h1 .hz { color: var(--hazard); }
+  .lede { margin-top: 20px; font-size: clamp(18px, 1.8vw, 21px); color: var(--text-2); max-width: 40ch; }
+  .lede strong { color: var(--text); font-weight: 600; }
+
+  .totals { display: flex; flex-wrap: wrap; gap: 20px 36px; margin: 36px 0 0; padding: 22px 0 0; border-top: 1px solid var(--rule); }
+  .totals div { display: flex; flex-direction: column-reverse; }
+  .totals dt { font-size: 15px; color: var(--text-2); }
+  .totals dd { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
+  .totals .hz dd { color: var(--hazard); }
+  @media (max-width: 520px) {
+    .totals { display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 12px 24px; }
+    .totals dt { font-size: 14px; line-height: 1.3; }
+    .totals dd { font-size: 30px; }
+  }
+  .stamp { margin-top: 18px; font-size: 15px; color: var(--text-3); }
+
+  .globe { margin: 0; }
+  .globe-stage { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 640px; margin: 0 auto; cursor: grab; }
+  .globe-stage:active { cursor: grabbing; }
+  .globe-stage canvas { display: block; width: 100% !important; height: 100% !important; touch-action: none; }
+  .globe figcaption { max-width: 640px; margin: 12px auto 0; font-size: 15px; color: var(--text-3); }
+  .globe-label {
+    position: absolute; left: 0; top: 0;
+    font-size: 13px; color: var(--text-2);
+    white-space: nowrap; pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+  .globe-tip {
+    position: absolute; left: 0; top: 0; z-index: 2;
+    min-width: 160px; padding: 8px 12px;
+    background: var(--bg); border: 1px solid var(--rule-strong);
+    font-size: 14px; line-height: 1.45; color: var(--text-2);
+    pointer-events: none;
+  }
+  .globe-tip strong { display: block; color: var(--text); font-weight: 600; }
+  .globe-tip.hz strong { color: var(--hazard); }
+
+  /* Sections */
+  .section { border-top: 1px solid var(--rule); }
+  .section.alt { background: var(--bg-alt); }
+  .section .wrap { padding-top: clamp(40px, 6vw, 72px); padding-bottom: clamp(40px, 6vw, 72px); }
+  .intro { max-width: 62ch; margin-bottom: 28px; }
+  .intro p { margin-top: 12px; color: var(--text-2); }
+
+  /* Hazard rows */
+  .hazards { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule-strong); }
+  .hazards li {
+    display: grid;
+    gap: 6px 32px;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  @media (min-width: 760px) {
+    .hazards li { grid-template-columns: 170px minmax(0, 1fr) 210px 150px; align-items: baseline; }
+  }
+  .hz-when { font-size: 16px; color: var(--text-2); }
+  .hz-when b { display: block; color: var(--hazard); font-weight: 600; }
+  .hz-name { font-size: 22px; font-weight: 700; letter-spacing: -0.015em; overflow-wrap: anywhere; }
+  .hz-detail { margin-top: 2px; font-size: 15px; color: var(--text-3); }
+  .hz-dist { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  .hz-dist span { font-size: 16px; font-weight: 500; color: var(--text-2); letter-spacing: 0; margin-left: 4px; }
+  .hz-km { font-size: 15px; color: var(--text-3); }
+  .hz-link { font-size: 15px; }
+  @media (min-width: 760px) { .hz-link { justify-self: end; } }
+  .empty { padding: 22px 0; border-top: 1px solid var(--rule-strong); border-bottom: 1px solid var(--rule); color: var(--text-2); }
+
+  /* Charts */
+  .chart { position: relative; height: clamp(260px, 36vw, 400px); }
+  .key { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-top: 16px; font-size: 15px; color: var(--text-2); }
+  .key span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 8px; background: var(--c); vertical-align: -1px; }
+  .key .dot::before { border-radius: 50%; }
+  .note { margin-top: 10px; font-size: 15px; color: var(--text-3); max-width: 70ch; }
+
+  /* Table */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: 16px; }
+  thead th { border-bottom: 1px solid var(--rule-strong); }
+  th, td { padding: 12px 14px; text-align: left; white-space: nowrap; }
+  th:first-child, td:first-child { padding-left: 0; }
+  th:last-child, td:last-child { padding-right: 0; }
+  td { border-bottom: 1px solid var(--rule); }
+  .r { text-align: right; }
+  td.n { font-family: var(--mono); font-size: 15px; }
+  th { font-weight: 600; }
+  th button { all: unset; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--text-2); }
+  th button:hover { color: var(--text); }
+  th button::after { content: "↕"; margin-left: 6px; color: var(--text-3); font-weight: 400; }
+  th[aria-sort] button { color: var(--text); }
+  th[aria-sort="ascending"] button::after { content: "↑"; color: var(--text); }
+  th[aria-sort="descending"] button::after { content: "↓"; color: var(--text); }
+  .rank { display: inline-block; min-width: 2ch; margin-right: 12px; color: var(--text-3); }
+  .tag-hz { color: var(--hazard); font-weight: 600; }
+  .tag-hz::before { content: "▲ "; font-size: 0.75em; }
+  .tag-ok { color: var(--text-3); }
+
+  .status { padding: 8px 0; }
+  .status.error h1 { color: var(--text); max-width: 22ch; }
+  .status.error p { margin-top: 16px; color: var(--text-2); max-width: 56ch; }
+
+  footer { border-top: 1px solid var(--rule); color: var(--text-3); font-size: 15px; }
+  footer .wrap { display: grid; gap: 10px; padding-top: 32px; padding-bottom: 48px; }
+  footer p { max-width: 80ch; }
+  footer a { color: var(--text-2); }
+
+  [hidden] { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <span class="wordmark">NeoWatch</span>
+    <p>Tracking asteroids that pass close to Earth, updated every day.</p>
+  </div>
+</header>
+
+<main>
+  <section class="hero" id="hero" aria-labelledby="headline">
+    <div class="wrap">
+      <div>
+        <div id="status" class="status">
+          <h1 id="headline">Loading the latest close approaches…</h1>
+        </div>
+        <div id="hero-body" hidden>
+          <p class="lede" id="lede"></p>
+          <dl class="totals">
+            <div><dt>asteroids tracked</dt><dd id="t-asteroids">–</dd></div>
+            <div><dt>close approaches</dt><dd id="t-approaches">–</dd></div>
+            <div class="hz"><dt>hazardous approaches</dt><dd id="t-hazardous">–</dd></div>
+          </dl>
+          <p class="stamp"><span id="updated"></span> · <span id="range"></span></p>
+        </div>
+      </div>
+
+      <figure class="globe" id="globe" hidden>
+        <div class="globe-stage" id="globe-stage"></div>
+        <figcaption>
+          Distance from Earth on a log scale. Position around the ring shows date, not direction. Not to scale.
+          <span id="globe-scope"></span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <div id="content" hidden>
+    <section class="section" aria-labelledby="h-hazards">
+      <div class="wrap">
+        <div class="intro">
+          <h2 id="h-hazards">Hazardous passes this week</h2>
+          <p>Asteroids NASA classes as potentially hazardous that pass Earth in the next seven days. Distance is given in lunar distances (LD): 1 LD is the average distance from Earth to the Moon.</p>
+        </div>
+        <ol class="hazards" id="hazards"></ol>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="h-daily">
+      <div class="wrap">
+        <div class="intro">
+          <h2 id="h-daily">Approaches per day</h2>
+          <p>How many asteroids passed close to Earth on each day, with the hazardous ones stacked at the bottom. Most days bring a handful; hazardous passes are a small share.</p>
+        </div>
+        <div class="chart"><canvas id="daily-chart" role="img" aria-label="Stacked bar chart of close approaches per day, split into hazardous and other"></canvas></div>
+        <div class="key">
+          <span style="--c: var(--blue)">Other approaches</span>
+          <span style="--c: var(--hazard)">Potentially hazardous</span>
+        </div>
+        <p class="note">Bars after the “today” line are upcoming days, drawn lighter. NASA's list for those days is still filling in, so expect them to grow.</p>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="h-scatter">
+      <div class="wrap">
+        <div class="intro">
+          <h2 id="h-scatter">Distance and size</h2>
+          <p>Each dot is one pass, placed by how close it came and how big the asteroid may be. Hazardous asteroids sit in the upper part: NASA's classification requires a large size as well as an orbit that comes near Earth's.</p>
+        </div>
+        <div class="chart"><canvas id="scatter-chart" role="img" aria-label="Scatter plot of miss distance in lunar distances against maximum estimated diameter in kilometres, both on log scales"></canvas></div>
+        <div class="key">
+          <span class="dot" style="--c: var(--blue)">Other</span>
+          <span class="dot" style="--c: var(--hazard)">Potentially hazardous</span>
+        </div>
+        <p class="note">Both axes use a log scale, so each gridline is ten times the one before.</p>
+      </div>
+    </section>
+
+    <section class="section alt" aria-labelledby="h-closest">
+      <div class="wrap">
+        <div class="intro">
+          <h2 id="h-closest">Closest passes</h2>
+          <p>The 25 nearest approaches in this period. Select a column heading to sort; names link to each asteroid's orbit details at NASA JPL.</p>
+        </div>
+        <div class="table-scroll">
+          <table id="closest">
+            <thead>
+              <tr>
+                <th data-key="name" scope="col"><button type="button">Asteroid</button></th>
+                <th data-key="date" scope="col"><button type="button">Date</button></th>
+                <th data-key="lunarDistances" scope="col" class="r" aria-sort="ascending"><button type="button">Distance (LD)</button></th>
+                <th data-key="missDistanceKm" scope="col" class="r"><button type="button">Distance (km)</button></th>
+                <th data-key="diameterMaxKm" scope="col" class="r"><button type="button">Diameter (km)</button></th>
+                <th data-key="velocityKmPerSec" scope="col" class="r"><button type="button">Speed (km/s)</button></th>
+                <th data-key="hazardous" scope="col"><button type="button">Status</button></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Data: <a href="https://api.nasa.gov/" rel="noopener">NASA NeoWs</a> · <a href="https://github.com/Eliasn20/NeoWatch" rel="noopener">github.com/Eliasn20/NeoWatch</a></p>
+    <p>“Potentially hazardous” is NASA's classification for asteroids that are large enough and whose orbits come near enough to Earth's to merit watching. It is not a prediction of an impact.</p>
+    <p>Earth image: Blue Marble, <a href="https://svs.gsfc.nasa.gov/2915" rel="noopener">NASA/Goddard Space Flight Center Scientific Visualization Studio</a>. Blue Marble data courtesy of Reto Stöckli (NASA/GSFC) and NASA's Earth Observatory.</p>
+    <p>NeoWatch is an independent project and is not affiliated with or endorsed by NASA.</p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"
+        integrity="sha384-Emf5ZVIUiarAdhkgtqK+5/Z5qIvM6QoVrS+qAVtfyZVuD5lIHrac0me485+Antp0"
+        crossorigin="anonymous"></script>
+<script>
+(() => {
+  "use strict";
+
+  const KM_PER_LD = 384400;
+  const DAY_MS = 86400000;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const css = getComputedStyle(document.documentElement);
+  const cssVar = name => css.getPropertyValue(name).trim();
+  const BLUE = cssVar("--blue");
+  const HAZARD = cssVar("--hazard");
+  const TEXT_2 = cssVar("--text-2");
+  const TEXT_3 = cssVar("--text-3");
+  const GRID = "rgba(255, 255, 255, 0.08)";
+
+  const fmt = {
+    int: new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }),
+    ld: new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    ldShort: new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }),
+    km: new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }),
+    mkm: new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }),
+    dia: new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 }),
+    speed: new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+    axis: new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 }),
+  };
+  const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  const shortDateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  const weekdayFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const stampFmt = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
+  const rel = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+  // Dates in data.json are plain "YYYY-MM-DD" calendar days in UTC.
+  const parseDay = s => new Date(s + "T00:00:00Z");
+  const todayUtc = (() => { const n = new Date(); return Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()); })();
+  const todayIso = new Date(todayUtc).toISOString().slice(0, 10);
+  const daysFromToday = s => Math.round((parseDay(s).getTime() - todayUtc) / DAY_MS);
+  const relDay = s => rel.format(daysFromToday(s), "day");
+  const millionKm = km => fmt.mkm.format(km / 1e6) + " million km";
+
+  /** Small DOM builder. Text always goes through textContent, never innerHTML. */
+  function el(tag, opts = {}, children = []) {
+    const node = document.createElement(tag);
+    if (opts.className) node.className = opts.className;
+    if (opts.text != null) node.textContent = opts.text;
+    if (opts.attrs) for (const [k, v] of Object.entries(opts.attrs)) node.setAttribute(k, v);
+    for (const child of children) if (child != null) node.append(child);
+    return node;
+  }
+  const text = s => document.createTextNode(s);
+
+  function relativeTime(iso) {
+    const seconds = (new Date(iso).getTime() - Date.now()) / 1000;
+    for (const [unit, size] of [["day", 86400], ["hour", 3600], ["minute", 60]]) {
+      if (Math.abs(seconds) >= size) return rel.format(Math.round(seconds / size), unit);
+    }
+    return "just now";
+  }
+
+  function jplLink(item, label) {
+    return el("a", { text: label, attrs: { href: item.jplUrl, rel: "noopener", target: "_blank" } });
+  }
+
+  // ---------- Hero ----------
+
+  function thisWeeksHazards(data) {
+    return data.upcomingHazards.filter(h => {
+      const d = daysFromToday(h.date);
+      return d >= 0 && d <= 7;
+    });
+  }
+
+  function renderHero(data) {
+    const week = thisWeeksHazards(data);
+    const asteroids = new Set(week.map(h => h.neoId)).size;
+    const headline = document.getElementById("headline");
+    const lede = document.getElementById("lede");
+
+    if (asteroids > 0) {
+      headline.replaceChildren(
+        el("span", { className: "hz", text: fmt.int.format(asteroids) }),
+        text(asteroids === 1
+          ? " potentially hazardous asteroid passes Earth this week"
+          : " potentially hazardous asteroids pass Earth this week"));
+      const c = week.reduce((a, b) => (b.missDistanceKm < a.missDistanceKm ? b : a));
+      lede.replaceChildren(
+        text(asteroids === 1 ? "It is " : "The closest is "),
+        el("strong", { text: c.name }),
+        text(", passing " + relDay(c.date) + " at " + fmt.ldShort.format(c.lunarDistances) +
+             " lunar distances, about " + millionKm(c.missDistanceKm) + " away."));
+    } else {
+      headline.textContent = "No potentially hazardous asteroids pass Earth this week";
+      const c = data.closest[0];
+      if (c) {
+        lede.replaceChildren(
+          text("The closest pass in this period was "),
+          el("strong", { text: c.name }),
+          text(", on " + dateFmt.format(parseDay(c.date)) + " at " + fmt.ldShort.format(c.lunarDistances) +
+               " lunar distances, about " + millionKm(c.missDistanceKm) + " away."));
+      } else {
+        lede.textContent = "No close approaches have been recorded yet.";
+      }
+    }
+
+    document.getElementById("t-asteroids").textContent = fmt.int.format(data.totals.asteroids);
+    document.getElementById("t-approaches").textContent = fmt.int.format(data.totals.approaches);
+    document.getElementById("t-hazardous").textContent = fmt.int.format(data.totals.hazardousApproaches);
+
+    const updated = document.getElementById("updated");
+    updated.textContent = "Updated " + relativeTime(data.generatedAtUtc);
+    updated.title = stampFmt.format(new Date(data.generatedAtUtc)) + " UTC";
+    document.getElementById("range").textContent = data.firstDate && data.lastDate
+      ? "Data from " + dateFmt.format(parseDay(data.firstDate)) + " to " + dateFmt.format(parseDay(data.lastDate))
+      : "No dates yet";
+
+    document.getElementById("hero-body").hidden = false;
+  }
+
+  // ---------- Hazard rows ----------
+
+  function renderHazards(data) {
+    const list = document.getElementById("hazards");
+    const items = thisWeeksHazards(data);
+
+    if (!items.length) {
+      list.replaceWith(el("p", { className: "empty", text: "No potentially hazardous passes in the next 7 days." }));
+      return;
+    }
+
+    list.replaceChildren(...items.map(item => el("li", {}, [
+      el("div", { className: "hz-when" }, [
+        el("b", { text: relDay(item.date) }),
+        text(weekdayFmt.format(parseDay(item.date))),
+      ]),
+      el("div", {}, [
+        el("div", { className: "hz-name", text: item.name }),
+        el("div", {
+          className: "hz-detail",
+          text: fmt.dia.format(item.diameterMinKm) + "–" + fmt.dia.format(item.diameterMaxKm) + " km wide · " +
+                fmt.speed.format(item.velocityKmPerSec) + " km/s",
+        }),
+      ]),
+      el("div", {}, [
+        el("div", { className: "hz-dist" }, [text(fmt.ld.format(item.lunarDistances)), el("span", { text: "LD" })]),
+        el("div", { className: "hz-km", text: fmt.km.format(item.missDistanceKm) + " km" }),
+      ]),
+      el("div", { className: "hz-link" }, [jplLink(item, "Orbit details at JPL")]),
+    ])));
+  }
+
+  // ---------- Charts ----------
+
+  function withAlpha(hex, alpha) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  }
+
+  // Draws a dashed vertical line through today's bar.
+  const todayMarker = {
+    id: "todayMarker",
+    afterDatasetsDraw(chart, _args, opts) {
+      if (opts.index == null || opts.index < 0) return;
+      const x = chart.scales.x.getPixelForValue(opts.index);
+      const { top, bottom } = chart.chartArea;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.strokeStyle = "rgba(243, 245, 248, 0.6)";
+      ctx.setLineDash([3, 4]);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, top + 18);
+      ctx.lineTo(x, bottom);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(243, 245, 248, 0.85)";
+      ctx.font = "600 13px " + cssVar("--sans");
+      ctx.textAlign = "center";
+      ctx.fillText("Today", x, top + 10);
+      ctx.restore();
+    },
+  };
+
+  function renderDaily(daily) {
+    const labels = daily.map(d => d.date);
+    const future = daily.map(d => d.date > todayIso);
+    const shade = (hex, i) => withAlpha(hex, future[i] ? 0.35 : 1);
+
+    new Chart(document.getElementById("daily-chart"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "Potentially hazardous", data: daily.map(d => d.hazardousCount), backgroundColor: daily.map((_, i) => shade(HAZARD, i)), stack: "s" },
+          { label: "Other", data: daily.map(d => d.approachCount - d.hazardousCount), backgroundColor: daily.map((_, i) => shade(BLUE, i)), stack: "s" },
+        ],
+      },
+      options: {
+        maintainAspectRatio: false,
+        datasets: { bar: { categoryPercentage: 0.88, barPercentage: 0.9 } },
+        interaction: { mode: "index", intersect: false },
+        layout: { padding: { top: 4 } },
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            border: { color: "rgba(255, 255, 255, 0.28)" },
+            ticks: {
+              autoSkip: true,
+              maxRotation: 0,
+              maxTicksLimit: window.innerWidth < 640 ? 4 : 8,
+              callback(value) { return shortDateFmt.format(parseDay(this.getLabelForValue(value))); },
+            },
+          },
+          y: { stacked: true, beginAtZero: true, grid: { color: GRID }, border: { display: false }, ticks: { precision: 0 } },
+        },
+        plugins: {
+          legend: { display: false },
+          todayMarker: { index: labels.indexOf(todayIso) },
+          tooltip: {
+            callbacks: {
+              title: items => {
+                const d = labels[items[0].dataIndex];
+                return weekdayFmt.format(parseDay(d)) + (d > todayIso ? " (upcoming)" : "");
+              },
+              label: item => item.dataset.label + ": " + fmt.int.format(item.parsed.y),
+              footer: items => "Total: " + fmt.int.format(daily[items[0].dataIndex].approachCount),
+            },
+          },
+        },
+      },
+      plugins: [todayMarker],
+    });
+  }
+
+  function renderScatter(points) {
+    const toPoint = p => ({ x: p.missDistanceKm / KM_PER_LD, y: p.diameterMaxKm, name: p.name });
+    // Log axes cannot show zero or negative values.
+    const valid = points.filter(p => p.missDistanceKm > 0 && p.diameterMaxKm > 0);
+    const logTicks = value => {
+      const exp = Math.log10(value);
+      return Math.abs(exp - Math.round(exp)) < 1e-9 ? fmt.axis.format(value) : "";
+    };
+
+    new Chart(document.getElementById("scatter-chart"), {
+      type: "scatter",
+      data: {
+        datasets: [
+          { label: "Other", data: valid.filter(p => !p.hazardous).map(toPoint), backgroundColor: withAlpha(BLUE, 0.6), pointRadius: 3.5, pointHoverRadius: 6 },
+          // Drawn last so hazardous points stay on top of the crowd.
+          { label: "Potentially hazardous", data: valid.filter(p => p.hazardous).map(toPoint), backgroundColor: HAZARD, pointRadius: 4.5, pointHoverRadius: 7 },
+        ],
+      },
+      options: {
+        maintainAspectRatio: false,
+        scales: {
+          x: { type: "logarithmic", title: { display: true, text: "Miss distance (lunar distances)", color: TEXT_2 }, grid: { color: GRID }, border: { display: false }, ticks: { callback: logTicks } },
+          y: { type: "logarithmic", title: { display: true, text: "Maximum diameter (km)", color: TEXT_2 }, grid: { color: GRID }, border: { display: false }, ticks: { callback: logTicks } },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: items => items[0].raw.name,
+              label: item => [
+                fmt.ld.format(item.raw.x) + " LD (" + fmt.km.format(item.raw.x * KM_PER_LD) + " km)",
+                "Up to " + fmt.dia.format(item.raw.y) + " km wide",
+              ],
+            },
+          },
+        },
+      },
+    });
+  }
+
+  function configureChartDefaults() {
+    Chart.defaults.color = TEXT_3;
+    Chart.defaults.borderColor = GRID;
+    Chart.defaults.font.family = cssVar("--sans");
+    Chart.defaults.font.size = 13;
+    Chart.defaults.animation = reduceMotion ? false : { duration: 450 };
+    Object.assign(Chart.defaults.plugins.tooltip, {
+      backgroundColor: "#0a0c10",
+      borderColor: "rgba(255, 255, 255, 0.28)",
+      borderWidth: 1,
+      cornerRadius: 0,
+      padding: 10,
+      titleColor: "#f3f5f8",
+      bodyColor: TEXT_2,
+      footerColor: TEXT_3,
+      titleFont: { family: cssVar("--sans"), weight: "600", size: 14 },
+      bodyFont: { family: cssVar("--sans"), size: 13 },
+      footerFont: { family: cssVar("--sans"), size: 13, weight: "400" },
+      displayColors: false,
+    });
+  }
+
+  // ---------- Table ----------
+
+  function renderClosest(items) {
+    const table = document.getElementById("closest");
+    const tbody = table.tBodies[0];
+    const headers = [...table.tHead.rows[0].cells];
+    let sortKey = "lunarDistances";
+    let ascending = true;
+
+    if (!items.length) {
+      tbody.replaceChildren(el("tr", {}, [el("td", { className: "tag-ok", text: "No approaches recorded yet.", attrs: { colspan: "7" } })]));
+      return;
+    }
+
+    const row = ({ item, rank }) => el("tr", {}, [
+      el("td", {}, [el("span", { className: "rank", text: String(rank) }), jplLink(item, item.name)]),
+      el("td", { text: dateFmt.format(parseDay(item.date)) }),
+      el("td", { className: "n r", text: fmt.ld.format(item.lunarDistances) }),
+      el("td", { className: "n r", text: fmt.km.format(item.missDistanceKm) }),
+      el("td", { className: "n r", text: fmt.dia.format(item.diameterMinKm) + "–" + fmt.dia.format(item.diameterMaxKm) }),
+      el("td", { className: "n r", text: fmt.speed.format(item.velocityKmPerSec) }),
+      el("td", {}, [item.hazardous
+        ? el("span", { className: "tag-hz", text: "Hazardous" })
+        : el("span", { className: "tag-ok", text: "Not hazardous" })]),
+    ]);
+
+    // Rank is fixed by distance so it still means "nth closest" after re-sorting.
+    const ranked = items.map((item, i) => ({ item, rank: i + 1 }));
+
+    function render() {
+      const sorted = [...ranked].sort((a, b) => {
+        const x = a.item[sortKey], y = b.item[sortKey];
+        const cmp = typeof x === "string" ? x.localeCompare(y) : Number(x) - Number(y);
+        return ascending ? cmp : -cmp;
+      });
+      tbody.replaceChildren(...sorted.map(row));
+      for (const th of headers) {
+        if (th.dataset.key === sortKey) th.setAttribute("aria-sort", ascending ? "ascending" : "descending");
+        else th.removeAttribute("aria-sort");
+      }
+    }
+
+    for (const th of headers) {
+      th.querySelector("button").addEventListener("click", () => {
+        const key = th.dataset.key;
+        if (key === sortKey) ascending = !ascending;
+        else { sortKey = key; ascending = key !== "hazardous"; }
+        render();
+      });
+    }
+    render();
+  }
+
+  // ---------- 3D globe ----------
+
+  function webglAvailable() {
+    try {
+      const c = document.createElement("canvas");
+      return !!(window.WebGLRenderingContext && (c.getContext("webgl2") || c.getContext("webgl")));
+    } catch {
+      return false;
+    }
+  }
+
+  /** Approaches with a date. scatter carries none today, so fall back to the dated lists. */
+  function datedApproaches(data) {
+    if (data.scatter.length && data.scatter.every(p => p.date)) {
+      return { items: data.scatter, complete: true };
+    }
+    const seen = new Map();
+    for (const a of [...data.closest, ...data.upcomingHazards]) seen.set(a.neoId + "|" + a.date, a);
+    return { items: [...seen.values()], complete: false };
+  }
+
+  async function renderGlobe(data) {
+    if (!webglAvailable() || !data.firstDate) return;
+    const { items, complete } = datedApproaches(data);
+    if (!items.length) return;
+
+    const THREE = await import("three");
+    const { OrbitControls } = await import("three/addons/controls/OrbitControls.js");
+
+    const figure = document.getElementById("globe");
+    const stage = document.getElementById("globe-stage");
+    figure.hidden = false;
+    document.getElementById("hero").classList.remove("no-globe");
+    if (!complete) {
+      document.getElementById("globe-scope").textContent =
+        "Shows the " + fmt.int.format(items.length) + " closest and upcoming hazardous passes.";
+    }
+
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch {
+      figure.hidden = true;
+      return;
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    stage.append(renderer.domElement);
+    renderer.domElement.setAttribute("role", "img");
+    renderer.domElement.setAttribute("aria-label",
+      "Interactive 3D Earth with the Moon's orbit and close approaches placed by distance and date");
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 200);
+    camera.position.set(0, 4.4, 26);
+
+    // Not to scale: Earth is drawn with radius 1.4 and the Moon's orbit (1 LD) at 2.6.
+    // Distance grows with log10(LD) so 5 LD and 200 LD both fit on screen.
+    const lds = items.map(a => a.missDistanceKm / KM_PER_LD);
+    const maxLd = Math.max(10, ...lds);
+    const EARTH_R = 1.4, MOON_R = 2.6, OUTER_R = 7.4;
+    const k = (OUTER_R / MOON_R - 1) / Math.log10(maxLd);
+    const radiusFor = ld => Math.max(EARTH_R + 0.25, MOON_R * (1 + k * Math.log10(ld)));
+
+    // Angle: date within the data range, 0 at the top, increasing clockwise.
+    const t0 = parseDay(data.firstDate).getTime();
+    const span = Math.max(DAY_MS, parseDay(data.lastDate).getTime() - t0);
+    const angleFor = date => ((parseDay(date).getTime() - t0) / span) * Math.PI * 2 * 0.97;
+    const posFor = (ld, date) => {
+      const r = radiusFor(ld), a = angleFor(date);
+      return new THREE.Vector3(Math.sin(a) * r, Math.cos(a) * r, 0);
+    };
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.6);
+    sun.position.set(-6, 3, 8);
+    scene.add(sun);
+
+    const texture = await new THREE.TextureLoader().loadAsync("assets/blue-marble-2048.jpg");
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const earth = new THREE.Mesh(
+      new THREE.SphereGeometry(EARTH_R, 64, 48),
+      new THREE.MeshLambertMaterial({ map: texture }));
+    const tilt = new THREE.Group();
+    tilt.rotation.z = THREE.MathUtils.degToRad(23.4);
+    tilt.add(earth);
+    scene.add(tilt);
+
+    const ringGeometry = (radius, segments = 256) => {
+      const pts = [];
+      for (let i = 0; i < segments; i++) {
+        const a = (i / segments) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.sin(a) * radius, Math.cos(a) * radius, 0));
+      }
+      return new THREE.BufferGeometry().setFromPoints(pts);
+    };
+    scene.add(new THREE.LineLoop(ringGeometry(MOON_R), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })));
+
+    // Round point sprite, drawn once.
+    const sprite = (() => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 64;
+      const g = c.getContext("2d");
+      g.fillStyle = "#fff";
+      g.beginPath();
+      g.arc(32, 32, 28, 0, Math.PI * 2);
+      g.fill();
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    })();
+
+    const layers = [];
+    for (const hazardous of [false, true]) {
+      const group = items.filter(a => !!a.hazardous === hazardous);
+      if (!group.length) continue;
+      const geometry = new THREE.BufferGeometry().setFromPoints(group.map(a => posFor(a.missDistanceKm / KM_PER_LD, a.date)));
+      const material = new THREE.PointsMaterial({
+        color: new THREE.Color(hazardous ? HAZARD : BLUE),
+        // In CSS pixels: three.js multiplies by the renderer's pixel ratio itself.
+        size: hazardous ? 11 : 8,
+        sizeAttenuation: false,
+        map: sprite,
+        transparent: true,
+        alphaTest: 0.4,
+      });
+      const points = new THREE.Points(geometry, material);
+      scene.add(points);
+      layers.push({ points, group });
+    }
+
+    // HTML labels that follow 3D positions.
+    const label = (textContent, position) => {
+      const node = el("span", { className: "globe-label", text: textContent });
+      stage.append(node);
+      return { node, position };
+    };
+    const labels = [
+      label("Moon · 1 LD", new THREE.Vector3(Math.sin(2.35) * MOON_R, Math.cos(2.35) * MOON_R, 0).multiplyScalar(1.2)),
+      label(shortDateFmt.format(parseDay(data.firstDate)) + " →", new THREE.Vector3(0, OUTER_R + 0.45, 0)),
+    ];
+
+    const tip = el("div", { className: "globe-tip", attrs: { hidden: "" } });
+    stage.append(tip);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enablePan = false;
+    controls.enableDamping = !reduceMotion;
+    controls.minDistance = 14;
+    controls.maxDistance = 36;
+    controls.rotateSpeed = 0.6;
+
+    const size = { w: 1, h: 1 };
+    const resize = () => {
+      size.w = stage.clientWidth;
+      size.h = stage.clientHeight;
+      renderer.setSize(size.w, size.h, false);
+      camera.aspect = size.w / size.h;
+      camera.updateProjectionMatrix();
+    };
+    new ResizeObserver(resize).observe(stage);
+    resize();
+
+    const project = v => {
+      const p = v.clone().project(camera);
+      return { x: (p.x + 1) / 2 * size.w, y: (1 - p.y) / 2 * size.h, behind: p.z > 1 };
+    };
+
+    // Picking: hover with a mouse, tap on touch screens.
+    const raycaster = new THREE.Raycaster();
+    raycaster.params.Points.threshold = 0.28;
+    const pointer = new THREE.Vector2();
+    let hovered = null;
+
+    function pick(clientX, clientY) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(layers.map(l => l.points));
+      if (!hits.length) return null;
+      const hit = hits.reduce((a, b) => (b.distanceToRay < a.distanceToRay ? b : a));
+      const layer = layers.find(l => l.points === hit.object);
+      return { item: layer.group[hit.index], position: hit.point };
+    }
+
+    function showTip(found) {
+      hovered = found;
+      if (!found) { tip.hidden = true; return; }
+      const a = found.item;
+      tip.className = "globe-tip" + (a.hazardous ? " hz" : "");
+      tip.replaceChildren(
+        el("strong", { text: a.name }),
+        text(dateFmt.format(parseDay(a.date))),
+        el("br"),
+        text(fmt.ld.format(a.missDistanceKm / KM_PER_LD) + " LD · " + fmt.km.format(a.missDistanceKm) + " km"));
+      tip.hidden = false;
+    }
+
+    renderer.domElement.addEventListener("pointermove", e => {
+      if (e.pointerType === "mouse" && e.buttons === 0) showTip(pick(e.clientX, e.clientY));
+    });
+    renderer.domElement.addEventListener("pointerleave", () => showTip(null));
+    let down = null;
+    renderer.domElement.addEventListener("pointerdown", e => { down = { x: e.clientX, y: e.clientY }; });
+    renderer.domElement.addEventListener("pointerup", e => {
+      // A tap, not a drag: show or clear the tooltip.
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && e.pointerType !== "mouse") {
+        showTip(pick(e.clientX, e.clientY));
+      }
+      down = null;
+    });
+
+    function placeOverlays() {
+      for (const l of labels) {
+        const p = project(l.position);
+        // Keep labels inside the stage when the view is dragged or zoomed.
+        const x = Math.min(Math.max(p.x, 40), size.w - 40);
+        const y = Math.min(Math.max(p.y, 10), size.h - 10);
+        l.node.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+        l.node.hidden = p.behind;
+      }
+      if (hovered && !tip.hidden) {
+        const p = project(hovered.position);
+        const x = Math.min(Math.max(p.x + 14, 4), size.w - tip.offsetWidth - 4);
+        const y = Math.max(p.y - tip.offsetHeight - 10, 4);
+        tip.style.transform = `translate(${x}px, ${y}px)`;
+      }
+    }
+
+    let visible = true;
+    new IntersectionObserver(entries => { visible = entries[0].isIntersecting; }).observe(stage);
+
+    let last = performance.now();
+    renderer.setAnimationLoop(now => {
+      const dt = Math.min((now - last) / 1000, 0.1);
+      last = now;
+      if (!visible) return;
+      if (!reduceMotion) earth.rotation.y += dt * 0.08;
+      controls.update();
+      renderer.render(scene, camera);
+      placeOverlays();
+    });
+  }
+
+  // ---------- Boot ----------
+
+  function showError(detail) {
+    const status = document.getElementById("status");
+    status.classList.add("error");
+    status.setAttribute("role", "alert");
+    document.getElementById("headline").textContent = "The dashboard data couldn't be loaded";
+    status.append(el("p", { text: detail }));
+  }
+
+  async function main() {
+    document.getElementById("hero").classList.add("no-globe");
+
+    let data;
+    try {
+      const response = await fetch("./data.json", { cache: "no-store" });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      data = await response.json();
+    } catch (err) {
+      showError("data.json is missing or unreadable (" + err.message + "). Try again later, or check that the daily publish job succeeded.");
+      return;
+    }
+
+    renderHero(data);
+    document.getElementById("content").hidden = false;
+    renderHazards(data);
+    renderClosest(data.closest);
+
+    renderGlobe(data).catch(err => {
+      // The page works without the globe; just leave it out.
+      document.getElementById("globe").hidden = true;
+      document.getElementById("hero").classList.add("no-globe");
+      console.warn("3D globe unavailable:", err);
+    });
+
+    if (typeof Chart === "undefined") {
+      for (const id of ["daily-chart", "scatter-chart"]) {
+        document.getElementById(id).parentElement.replaceWith(
+          el("p", { className: "empty", text: "The chart couldn't load (Chart.js was blocked or offline). The table and alerts above are still current." }));
+      }
+      return;
+    }
+    await document.fonts.ready;
+    configureChartDefaults();
+    renderDaily(data.daily);
+    renderScatter(data.scatter);
+  }
+
+  main();
+})();
+</script>
+</body>
+</html>

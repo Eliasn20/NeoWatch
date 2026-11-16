@@ -44,7 +44,15 @@ public sealed class IngestionWorker(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<IngestionPipeline>().RunAsync(stoppingToken);
+            var result = await scope.ServiceProvider.GetRequiredService<IngestionPipeline>().RunAsync(stoppingToken);
+
+            // Exporting now would publish a dashboard built from stale or no data.
+            if (result.IsDead)
+            {
+                Environment.ExitCode = 1;
+                logger.LogError("All {Attempted} windows failed; skipping export", result.Attempted);
+                return;
+            }
 
             var exportPath = options.Value.ExportPath;
             if (!string.IsNullOrWhiteSpace(exportPath))

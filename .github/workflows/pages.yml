@@ -1,0 +1,62 @@
+name: Publish dashboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "23 10 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publish at a time. A newer run waits instead of cancelling a deploy halfway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 11.0.x
+
+      - name: Check NASA_API_KEY secret
+        env:
+          NASA_API_KEY: ${{ secrets.NASA_API_KEY }}
+        run: |
+          if [ -z "$NASA_API_KEY" ]; then
+            echo "::error::The NASA_API_KEY repository secret is not set."
+            exit 1
+          fi
+
+      - name: Ingest and export data.json
+        env:
+          NeoWs__ApiKey: ${{ secrets.NASA_API_KEY }}
+          NeoWs__RunOnce: "true"
+          NeoWs__ExportPath: ${{ github.workspace }}/site/data.json
+          ConnectionStrings__NeoWatch: Data Source=${{ runner.temp }}/neowatch.db
+        # --no-launch-profile: launchSettings.json would otherwise switch CI to Development.
+        run: dotnet run --project src/NeoWatch.Worker --configuration Release --no-launch-profile
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

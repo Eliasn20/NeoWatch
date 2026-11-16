@@ -6,6 +6,13 @@ using NeoWatch.Infrastructure;
 
 namespace NeoWatch.Worker;
 
+/// <summary>How many windows a run tried and how many of those were stored.</summary>
+public readonly record struct PipelineRunResult(int Attempted, int Succeeded)
+{
+    /// <summary>Work was needed and none of it got done, e.g. NASA was down for the whole run.</summary>
+    public bool IsDead => Attempted > 0 && Succeeded == 0;
+}
+
 /// <summary>One full run: work out which windows are needed, then fetch, map and store each.</summary>
 public sealed class IngestionPipeline(
     INeoWsClient client,
@@ -16,7 +23,7 @@ public sealed class IngestionPipeline(
 {
     private readonly NeoWsOptions _options = options.Value;
 
-    public async Task RunAsync(CancellationToken ct)
+    public async Task<PipelineRunResult> RunAsync(CancellationToken ct)
     {
         var today = DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime);
 
@@ -28,6 +35,8 @@ public sealed class IngestionPipeline(
 
         var windows = DateWindows.Split(start, end);
         var completed = await repository.GetCompletedWindowsAsync(ct);
+        var attempted = 0;
+        var succeeded = 0;
 
         foreach (var window in windows)
         {
@@ -38,11 +47,17 @@ public sealed class IngestionPipeline(
                 continue;
             }
 
-            await IngestWindowAsync(window, today, ct);
+            attempted++;
+            if (await IngestWindowAsync(window, today, ct))
+            {
+                succeeded++;
+            }
         }
+
+        return new PipelineRunResult(attempted, succeeded);
     }
 
-    private async Task IngestWindowAsync(DateRange window, DateOnly today, CancellationToken ct)
+    private async Task<bool> IngestWindowAsync(DateRange window, DateOnly today, CancellationToken ct)
     {
         var run = new IngestionRun
         {
@@ -80,6 +95,8 @@ public sealed class IngestionPipeline(
             run.FinishedAtUtc = time.GetUtcNow().UtcDateTime;
             await repository.RecordRunAsync(run, CancellationToken.None);
         }
+
+        return run.Succeeded;
     }
 
     private void LogHazards(IReadOnlyList<ParsedApproach> approaches, DateOnly today)
