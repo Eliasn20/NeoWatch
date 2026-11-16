@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
             db.UseSqlite(configuration.GetConnectionString("NeoWatch") ?? "Data Source=neowatch.db"));
 
         services.AddScoped<IApproachRepository, ApproachRepository>();
+        services.AddScoped<DashboardExporter>();
 
         services
             .AddHttpClient<INeoWsClient, NeoWsClient>((sp, http) =>

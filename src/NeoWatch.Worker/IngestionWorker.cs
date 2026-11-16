@@ -7,10 +7,17 @@ namespace NeoWatch.Worker;
 public sealed class IngestionWorker(
     IServiceScopeFactory scopeFactory,
     IOptions<NeoWsOptions> options,
+    IHostApplicationLifetime lifetime,
     ILogger<IngestionWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (options.Value.RunOnce)
+        {
+            await RunOnceAsync(stoppingToken);
+            return;
+        }
+
         using var timer = new PeriodicTimer(TimeSpan.FromHours(options.Value.PollIntervalHours));
 
         do
@@ -30,5 +37,33 @@ public sealed class IngestionWorker(
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    private async Task RunOnceAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IngestionPipeline>().RunAsync(stoppingToken);
+
+            var exportPath = options.Value.ExportPath;
+            if (!string.IsNullOrWhiteSpace(exportPath))
+            {
+                await scope.ServiceProvider.GetRequiredService<DashboardExporter>().ExportAsync(exportPath, stoppingToken);
+                logger.LogInformation("Dashboard exported to {Path}", Path.GetFullPath(exportPath));
+            }
+
+            logger.LogInformation("Run-once finished");
+        }
+        catch (Exception ex)
+        {
+            // A non-zero exit code is how the scheduled CI job learns the run failed.
+            Environment.ExitCode = 1;
+            logger.LogError(ex, "Run-once failed");
+        }
+        finally
+        {
+            lifetime.StopApplication();
+        }
     }
 }

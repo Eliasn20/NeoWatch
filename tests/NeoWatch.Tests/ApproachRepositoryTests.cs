@@ -63,7 +63,7 @@ public sealed class ApproachRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task Upsert_ChangedDistance_UpdatesApproach()
+    public async Task Upsert_ChangedDistance_PersistsNewValue()
     {
         // First run: save the asteroid with its original distance.
         await using (var db = new NeoWatchDbContext(_options))
@@ -78,29 +78,12 @@ public sealed class ApproachRepositoryTests : IDisposable
                 .UpsertAsync([Sample(missKm: 9_999_999)], CancellationToken.None);
 
             Assert.Equal(new UpsertResult(Inserted: 0, Updated: 1), second);
+        }
+
+        // Fresh context, so the value is read from SQLite rather than the change tracker.
+        await using (var db = new NeoWatchDbContext(_options))
+        {
             Assert.Equal(1, await db.Asteroids.CountAsync());
-            Assert.Equal(1, await db.CloseApproaches.CountAsync());
-        }
-    }
-
-    [Fact]
-    public async Task Upsert_ChangedDistance_PersistsNewValue()
-    {
-        await using (var db = new NeoWatchDbContext(_options))
-        {
-            await new ApproachRepository(db).UpsertAsync([Sample()], CancellationToken.None);
-        }
-
-        await using (var db = new NeoWatchDbContext(_options))
-        {
-            var second = await new ApproachRepository(db)
-                .UpsertAsync([Sample(missKm: 9_999_999)], CancellationToken.None);
-
-            Assert.Equal(new UpsertResult(Inserted: 0, Updated: 1), second);
-        }
-
-        await using (var db = new NeoWatchDbContext(_options))
-        {
             var stored = await db.CloseApproaches.SingleAsync();
             Assert.Equal(9_999_999, stored.MissDistanceKm);
         }
