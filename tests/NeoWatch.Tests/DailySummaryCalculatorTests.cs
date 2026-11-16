@@ -33,4 +33,32 @@ public class DailySummaryCalculatorTests
         Assert.Equal(38, summaries.Sum(s => s.ApproachCount));
         Assert.Equal(3, summaries.Sum(s => s.HazardousCount));
     }
+
+    [Fact]
+    public void Summarize_EmptyInput_ReturnsEmptyList()
+    {
+        var summaries = DailySummaryCalculator.Summarize([]);
+
+        Assert.Empty(summaries);
+    }
+
+    [Fact]
+    public void Summarize_UnorderedInput_ReturnsSummariesOrderedByDate()
+    {
+        static ParsedApproach On(DateOnly date) =>
+            new("1", "(1)", 21.3, 0.146, 0.327, false, date, 0, 13.45, 4_500_000, "Earth");
+
+        var approaches = new[]
+        {
+            On(new DateOnly(2026, 11, 17)),
+            On(new DateOnly(2026, 11, 15)),
+            On(new DateOnly(2026, 11, 16)),
+        };
+
+        var summaries = DailySummaryCalculator.Summarize(approaches);
+
+        Assert.Equal(
+            [new DateOnly(2026, 11, 15), new DateOnly(2026, 11, 16), new DateOnly(2026, 11, 17)],
+            summaries.Select(s => s.Date));
+    }
 }

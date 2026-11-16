@@ -83,9 +83,71 @@ public sealed class ApproachRepositoryTests : IDisposable
         }
     }
 
-    // TODO (Elias): add tests for
-    // - same asteroid, changed miss distance => Updated = 1, value changed in the database
-    // - same asteroid, second approach (different epoch) => 1 asteroid, 2 approaches
-    // - two different asteroids in one batch
-    // - the same asteroid appearing twice within a single batch
+    [Fact]
+    public async Task Upsert_ChangedDistance_PersistsNewValue()
+    {
+        await using (var db = new NeoWatchDbContext(_options))
+        {
+            await new ApproachRepository(db).UpsertAsync([Sample()], CancellationToken.None);
+        }
+
+        await using (var db = new NeoWatchDbContext(_options))
+        {
+            var second = await new ApproachRepository(db)
+                .UpsertAsync([Sample(missKm: 9_999_999)], CancellationToken.None);
+
+            Assert.Equal(new UpsertResult(Inserted: 0, Updated: 1), second);
+        }
+
+        await using (var db = new NeoWatchDbContext(_options))
+        {
+            var stored = await db.CloseApproaches.SingleAsync();
+            Assert.Equal(9_999_999, stored.MissDistanceKm);
+        }
+    }
+
+    [Fact]
+    public async Task Upsert_SameAsteroidDifferentEpoch_AddsSecondApproach()
+    {
+        await using (var db = new NeoWatchDbContext(_options))
+        {
+            await new ApproachRepository(db).UpsertAsync([Sample()], CancellationToken.None);
+        }
+
+        await using (var db = new NeoWatchDbContext(_options))
+        {
+            var second = await new ApproachRepository(db)
+                .UpsertAsync([Sample(epoch: 1826267400000)], CancellationToken.None);
+
+            Assert.Equal(new UpsertResult(Inserted: 1, Updated: 0), second);
+            Assert.Equal(1, await db.Asteroids.CountAsync());
+            Assert.Equal(2, await db.CloseApproaches.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Upsert_TwoAsteroidsInOneBatch_InsertsBoth()
+    {
+        await using var db = new NeoWatchDbContext(_options);
+        var repository = new ApproachRepository(db);
+
+        var result = await repository.UpsertAsync([Sample("9000001"), Sample("9000002")], CancellationToken.None);
+
+        Assert.Equal(new UpsertResult(Inserted: 2, Updated: 0), result);
+        Assert.Equal(2, await db.Asteroids.CountAsync());
+        Assert.Equal(2, await db.CloseApproaches.CountAsync());
+    }
+
+    [Fact]
+    public async Task Upsert_SameAsteroidTwiceInOneBatch_InsertsOnce()
+    {
+        await using var db = new NeoWatchDbContext(_options);
+        var repository = new ApproachRepository(db);
+
+        var result = await repository.UpsertAsync([Sample(), Sample()], CancellationToken.None);
+
+        Assert.Equal(new UpsertResult(Inserted: 1, Updated: 0), result);
+        Assert.Equal(1, await db.Asteroids.CountAsync());
+        Assert.Equal(1, await db.CloseApproaches.CountAsync());
+    }
 }

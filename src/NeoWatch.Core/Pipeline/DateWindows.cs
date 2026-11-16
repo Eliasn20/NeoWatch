@@ -13,12 +13,6 @@ public static class DateWindows
     /// </summary>
     public static IReadOnlyList<DateRange> Split(DateOnly start, DateOnly end, int maxDays = MaxFeedDays)
     {
-        // TODO (Elias) - Milestone 2a
-        // 1. Guard clauses: throw ArgumentOutOfRangeException if maxDays < 1,
-        //    ArgumentException if end < start.
-        // 2. Loop from start, each window ends at min(windowStart + maxDays - 1, end).
-        // Hints: DateOnly.AddDays(n), and DateOnly supports <, > and == directly.
-
         if (maxDays < 1)
             throw new ArgumentOutOfRangeException(nameof(maxDays), "max days must be at least 1");
         if (end < start)
