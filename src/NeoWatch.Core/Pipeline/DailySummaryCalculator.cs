@@ -7,12 +7,19 @@ public static class DailySummaryCalculator
     /// <summary>Builds one DailySummary per distinct date in the input.</summary>
     public static IReadOnlyList<DailySummary> Summarize(IEnumerable<ParsedApproach> approaches)
     {
-        // TODO (Elias) - Milestone 5
-        // GroupBy(a => a.Date), then for each group compute:
-        //   ApproachCount, HazardousCount,
-        //   closest approach  -> MinBy(a => a.MissDistanceKm)
-        //   largest asteroid  -> MaxBy(a => a.DiameterMaxKm)
-        // Return ordered by date. Empty input => empty list.
-        throw new NotImplementedException();
+        return approaches
+            .GroupBy(a=> a.Date)
+            .OrderBy(g => g.Key)
+            .Select(g => new DailySummary
+            {
+               Date = g.Key,
+               ApproachCount = g.Count(),
+               HazardousCount = g.Count(a => a.IsPotentiallyHazardous),
+               ClosestMissKm = g.Min(a => a.MissDistanceKm),
+               ClosestAsteroidName = g.MinBy(a => a.MissDistanceKm)!.Name,
+               LargestDiameterKm = g.Max(a => a.DiameterMaxKm),
+               LargestAsteroidName = g.MaxBy(a => a.DiameterMaxKm)!.Name,
+            })
+            .ToList();
     }
 }
